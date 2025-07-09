@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>會學習的五子棋電腦</title>
+  <style>
+    canvas { border: 2px solid #555; background: #f0d9b5; display: block; margin: auto; }
+    body { font-family: sans-serif; text-align: center; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h2>五子棋｜玩家 vs 電腦（記憶學習版）</h2>
+  <canvas id="board" width="760" height="760"></canvas>
+  <p id="status"></p>
+  <button onclick="restart()">再來一局</button>
+  <script>
+    const SIZE = 19;
+    const CELL = 40;
+    let board, moves, gameOver, winner;
+
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+
+    function initGame() {
+      board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+      moves = [];
+      gameOver = false;
+      winner = null;
+      drawBoard();
+      document.getElementById("status").innerText = "";
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(CELL / 2, CELL / 2 + i * CELL);
+        ctx.lineTo(CELL / 2 + (SIZE - 1) * CELL, CELL / 2 + i * CELL);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(CELL / 2 + i * CELL, CELL / 2);
+        ctx.lineTo(CELL / 2 + i * CELL, CELL / 2 + (SIZE - 1) * CELL);
+        ctx.stroke();
+      }
+
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (board[y][x]) drawPiece(x, y, board[y][x] === "X" ? "black" : "white");
+        }
+      }
+    }
+
+    function drawPiece(x, y, color) {
+      ctx.beginPath();
+      ctx.arc(CELL / 2 + x * CELL, CELL / 2 + y * CELL, 12, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    function checkWin(x, y, role) {
+      const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+      for (let [dx, dy] of dirs) {
+        let count = 1;
+        for (let dir of [-1, 1]) {
+          let nx = x + dx * dir, ny = y + dy * dir;
+          while (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && board[ny][nx] === role) {
+            count++;
+            nx += dx * dir;
+            ny += dy * dir;
+          }
+        }
+        if (count >= 5) return true;
+      }
+      return false;
+    }
+
+    function saveGameResult() {
+      const history = JSON.parse(localStorage.getItem("gomokuHistory") || "[]");
+      history.push({ moves: moves, winner: winner });
+      localStorage.setItem("gomokuHistory", JSON.stringify(history));
+    }
+
+    function evaluateMove(x, y) {
+      const history = JSON.parse(localStorage.getItem("gomokuHistory") || "[]");
+      let score = 0;
+      for (let game of history) {
+        const m = game.moves;
+        if (m.length > moves.length && m[moves.length].x === x && m[moves.length].y === y) {
+          if (game.winner === "O") score += 2;
+          if (game.winner === "X") score -= 1;
+        }
+      }
+      return score;
+    }
+
+    function aiMove() {
+      let best = { x: -1, y: -1, score: -Infinity };
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (!board[y][x]) {
+            let s = evaluateMove(x, y);
+            if (s > best.score) best = { x, y, score: s };
+          }
+        }
+      }
+      if (best.x >= 0) {
+        board[best.y][best.x] = "O";
+        moves.push({ x: best.x, y: best.y, player: "O" });
+        drawPiece(best.x, best.y, "white");
+        if (checkWin(best.x, best.y, "O")) {
+          gameOver = true;
+          winner = "O";
+          document.getElementById("status").innerText = "😈 電腦獲勝！";
+          saveGameResult();
+        }
+      }
+    }
+
+    canvas.addEventListener("click", (e) => {
+      if (gameOver) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.round((e.clientX - rect.left - CELL / 2) / CELL);
+      const y = Math.round((e.clientY - rect.top - CELL / 2) / CELL);
+      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && !board[y][x]) {
+        board[y][x] = "X";
+        moves.push({ x, y, player: "X" });
+        drawPiece(x, y, "black");
+        if (checkWin(x, y, "X")) {
+          gameOver = true;
+          winner = "X";
+          document.getElementById("status").innerText = "🎉 你獲勝了！";
+          saveGameResult();
+        } else {
+          setTimeout(aiMove, 200);
+        }
+      }
+    });
+
+    function restart() {
+      initGame();
+    }
+
+    initGame();
+  </script>
+</body>
+</html>
